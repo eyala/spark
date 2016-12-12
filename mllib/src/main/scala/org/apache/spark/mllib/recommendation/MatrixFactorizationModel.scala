@@ -114,19 +114,27 @@ class MatrixFactorizationModel @Since("0.8.0") (
    * unless a user or product is missing in the training set.
    *
    * @param usersProducts  RDD of (user, product) pairs.
+   * @param decide whether there are more users or products. The default is to auto-calculate this 
    * @return RDD of Ratings.
    */
   @Since("0.9.0")
-  def predict(usersProducts: RDD[(Int, Int)]): RDD[Rating] = {
+  def predict(usersProducts: RDD[(Int, Int)], decide : UsersProductsRatio = Unknown): RDD[Rating] = {
     // Previously the partitions of ratings are only based on the given products.
     // So if the usersProducts given for prediction contains only few products or
     // even one product, the generated ratings will be pushed into few or single partition
     // and can't use high parallelism.
     // Here we calculate approximate numbers of users and products. Then we decide the
     // partitions should be based on users or products.
-    val (usersCount, productsCount) = countApproxDistinctUserProduct(usersProducts)
+    val moreProducts = {
+      if (decide == Unknown) {
+        val (usersCount, productsCount) = countApproxDistinctUserProduct(usersProducts)
+        usersCount < productsCount
+      } else {
+        decide == MoreProducts
+      }
+    }
 
-    if (usersCount < productsCount) {
+    if (moreProducts) {
       val users = userFeatures.join(usersProducts).map {
         case (user, (uFeatures, product)) => (product, (user, uFeatures))
       }
@@ -241,6 +249,12 @@ class MatrixFactorizationModel @Since("0.8.0") (
     }
   }
 }
+
+sealed abstract class UsersProductsRatio
+
+case object MoreUsers extends UsersProductsRatio
+case object MoreProducts extends UsersProductsRatio
+case object Unknown extends UsersProductsRatio
 
 @Since("1.3.0")
 object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {

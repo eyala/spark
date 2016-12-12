@@ -91,4 +91,21 @@ class MatrixFactorizationModelSuite extends SparkFunSuite with MLlibTestSparkCon
     assert(recommendations(2)(1).user == 0)
     assert(recommendations(2)(1).rating ~== 17.0 relTol 1e-14)
   }
+  
+  test("rdd predict API") {
+    val model = new MatrixFactorizationModel(rank, userFeatures, prodFeatures)
+    
+    val toPredict = sc.parallelize(Seq((0, 1), (0, 2), (1, 1), (1, 2)))
+    
+    val predictions = model.predict(toPredict).collect
+
+    assert(predictions(1).rating ~== 39.0 relTol 1e-14)
+    assert(predictions(0).rating ~== 17.0 relTol 1e-14)
+    
+    val moreUserPredictions = model.predict(toPredict, org.apache.spark.mllib.recommendation.MoreUsers).collect
+    val moreProductsPredictions = model.predict(toPredict, org.apache.spark.mllib.recommendation.MoreProducts).collect
+    
+    assert(predictions.sameElements(moreUserPredictions))
+    assert(predictions.sameElements(moreProductsPredictions))
+  }  
 }
